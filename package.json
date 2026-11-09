@@ -1,0 +1,20 @@
+{
+  "name": "ntpc-campus-kiosk-game",
+  "version": "1.0.0",
+  "private": true,
+  "description": "台灣教育科技展 - 新北校園通APP 互動闖關小遊戲 (Vue 3 重構版)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "vite": "^6.0.0"
+  }
+}
+
