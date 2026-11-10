@@ -25,7 +25,7 @@
           <span class="fb-badge retry" aria-hidden="true">?</span>
           <span class="fb-title">再想想看！</span>
           <span class="module-chip" :style="{ '--chip': wrongModule.color }">
-            <span class="chip-icon" v-html="iconSvg(wrongModule)"></span>
+            <img :src="asset(wrongModule.icon)" :alt="wrongModule.name" class="chip-icon-img" />
             {{ wrongModule.name }}
           </span>
         </div>
@@ -43,7 +43,9 @@
     <!-- 狀態 C：回答正確 — 橫向三區：答對功能標章 ＋ 功能生活化說明 ＋ 官方實績數據 -->
     <div v-else-if="phase === 'correct'" key="correct" class="fb fb-correct">
       <div class="correct-left" :style="{ '--chip': answerModule.color }">
-        <span class="answer-icon" v-html="iconSvg(answerModule)"></span>
+        <span class="answer-icon" :style="{ background: answerModule.tint }">
+          <img :src="asset(answerModule.icon)" :alt="answerModule.name" class="answer-icon-img" />
+        </span>
         <div class="correct-title-group">
           <span class="correct-tag">✓ 答對了！</span>
           <span class="answer-name">{{ answerModule.name }}</span>
@@ -61,6 +63,8 @@
 </template>
 
 <script setup>
+import { asset } from '../utils/asset'
+
 defineProps({
   phase: { type: String, required: true },
   quest: { type: Object, required: true },
@@ -68,10 +72,6 @@ defineProps({
   answerModule: { type: Object, required: true },
   wrongPulse: { type: Number, default: 0 }
 })
-
-function iconSvg(mod) {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${mod.iconSvg}</svg>`
-}
 </script>
 
 <style scoped>
@@ -203,8 +203,8 @@ function iconSvg(mod) {
 .module-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 14px 3px 5px;
+  gap: 7px;
+  padding: 3px 14px 3px 8px;
   border-radius: var(--r-pill);
   background: #fff;
   border: 2px solid var(--chip);
@@ -213,19 +213,11 @@ function iconSvg(mod) {
   color: var(--c-ink-900);
 }
 
-.chip-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--chip);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chip-icon :deep(svg) {
-  width: 16px;
-  height: 16px;
+.chip-icon-img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  display: block;
 }
 
 .fb-body {
@@ -262,7 +254,7 @@ function iconSvg(mod) {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 12px 18px;
+  padding: 10px 18px;
   background: #ffffff;
   border-radius: var(--r-sm);
   border: 2px solid #a7f3d0;
@@ -270,10 +262,10 @@ function iconSvg(mod) {
 }
 
 .answer-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--chip);
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  padding: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -282,9 +274,11 @@ function iconSvg(mod) {
   animation: pulseRing 1.2s ease-out 2;
 }
 
-.answer-icon :deep(svg) {
-  width: 30px;
-  height: 30px;
+.answer-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .correct-title-group {
