@@ -5,9 +5,10 @@ import { asset } from '../utils/asset'
 const OLD_CACHE_NAMES = [
   'ntpc-kiosk-video-cache-v1',
   'ntpc-kiosk-video-cache-v2',
-  'ntpc-kiosk-video-cache-v3'
+  'ntpc-kiosk-video-cache-v3',
+  'ntpc-kiosk-video-cache-v4'
 ]
-const CACHE_NAME = 'ntpc-kiosk-video-cache-v4'
+const CACHE_NAME = 'ntpc-kiosk-video-cache-v5'
 
 // 單例狀態：跨組件共享影片快取與預載進度
 const blobUrlMap = reactive({})
@@ -43,7 +44,8 @@ export function useVideoCache() {
   /**
    * 檢查並預載單一題目影片：
    * - 同次瀏覽期間：直接使用記憶體 Blob URL (blobUrlMap)，切換題目 0ms 零延遲
-   * - 初次載入或重整頁面：使用 fetch(videoSrc, { cache: 'no-cache' }) 透過 ETag/Last-Modified 確認是否為最新影片檔（若替換同名影片檔也能立即更新），並寫入 CacheStorage 供離線備援
+   * - 優先檢查瀏覽器 CacheStorage 本地快取，命中時免網路下載直接轉為 Blob
+   * - 未命中時以標準 HTTP 快取 (cache: 'default') 背景下載並寫入 CacheStorage
    */
   async function preloadQuestVideo(quest, forceRefresh = false) {
     if (!quest || !quest.videoSrc) return null
@@ -62,9 +64,22 @@ export function useVideoCache() {
     try {
       let response = null
 
-      // 1. 優先向伺服器確認最新影片（支援 ETag 304 快速驗證；若替換了同名 .mp4 也能立即抓取新版）
-      try {
-        const netRes = await fetch(videoSrc, { cache: 'no-cache' })
+      // 1. 優先從 CacheStorage 讀取已快取的影片（秒開免重抓）
+      if (!forceRefresh && 'caches' in window) {
+        try {
+          const cache = await caches.open(CACHE_NAME)
+          const cachedRes = await cache.match(videoSrc)
+          if (isValidVideoResponse(cachedRes)) {
+            response = cachedRes
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // 2. 若本地尚未快取，透過 CDN 標準快取下載並寫入 CacheStorage
+      if (!response) {
+        const netRes = await fetch(videoSrc, { cache: 'default' })
         if (isValidVideoResponse(netRes)) {
           response = netRes
           if ('caches' in window) {
@@ -74,19 +89,6 @@ export function useVideoCache() {
             } catch {
               // ignore cache write quota error
             }
-          }
-        }
-      } catch {
-        // 2. 若處於完全離線環境，從 CacheStorage 讀取離線備援
-        if ('caches' in window) {
-          try {
-            const cache = await caches.open(CACHE_NAME)
-            const cachedRes = await cache.match(videoSrc)
-            if (isValidVideoResponse(cachedRes)) {
-              response = cachedRes
-            }
-          } catch {
-            // ignore
           }
         }
       }
@@ -117,17 +119,19 @@ export function useVideoCache() {
   }
 
   /**
-   * 展場背景批次預載：優先載入當前題目，再依序快取其餘 8 題影片
+   * 展場背景批次預載：
+   * 首題已由 <video> 原生 Range 串流直接播放，背景預載先載入「下一題與其他題目」，
+   * 避免與首屏圖片及當前串流影片爭搶頻寬，最後才將當前題目收入快取。
    */
-  async function preloadAllVideos(priorityQuestId = null) {
+  async function preloadAllVideos(activeQuestId = null) {
     if (isPreloading.value) return
     isPreloading.value = true
 
     try {
       await cleanupOldCaches()
       const quests = [...KIOSK_QUESTS]
-      if (priorityQuestId) {
-        quests.sort((a, b) => (a.id === priorityQuestId ? -1 : b.id === priorityQuestId ? 1 : 0))
+      if (activeQuestId) {
+        quests.sort((a, b) => (a.id === activeQuestId ? 1 : b.id === activeQuestId ? -1 : 0))
       }
 
       for (const quest of quests) {

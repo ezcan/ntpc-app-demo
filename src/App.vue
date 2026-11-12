@@ -197,16 +197,21 @@ function goNext() {
   resetRound()
 }
 
+let preloadTimer = null
+
 onMounted(() => {
   fitStage()
   window.addEventListener('resize', fitStage)
   start()
-  // 背景預載全部題目影片（優先目前題目）；未放影片時自動使用情境插圖
-  preloadAllVideos(quest.value.id)
+  // 延遲 1.8 秒再啟動背景預載其餘題目影片，讓首屏介面圖示與第一支 faststart 影片獨享 100% 網路頻寬秒開
+  preloadTimer = setTimeout(() => {
+    preloadAllVideos(quest.value.id)
+  }, 1800)
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', fitStage)
+  if (preloadTimer) clearTimeout(preloadTimer)
 })
 </script>
 
