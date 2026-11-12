@@ -2,8 +2,12 @@ import { reactive, ref, computed } from 'vue'
 import { KIOSK_QUESTS } from '../data/quests'
 import { asset } from '../utils/asset'
 
-const OLD_CACHE_NAMES = ['ntpc-kiosk-video-cache-v1', 'ntpc-kiosk-video-cache-v2']
-const CACHE_NAME = 'ntpc-kiosk-video-cache-v3'
+const OLD_CACHE_NAMES = [
+  'ntpc-kiosk-video-cache-v1',
+  'ntpc-kiosk-video-cache-v2',
+  'ntpc-kiosk-video-cache-v3'
+]
+const CACHE_NAME = 'ntpc-kiosk-video-cache-v4'
 
 // 單例狀態：跨組件共享影片快取與預載進度
 const blobUrlMap = reactive({})
