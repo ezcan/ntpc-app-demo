@@ -4,49 +4,49 @@
     <div class="question-block">
       <div class="q-top-bar">
         <span class="q-badge">💡 生活情境題</span>
-        <span v-if="videoUrl" class="q-media-pill">🎬 情境動畫播放中</span>
+        <span v-if="!videoError" class="q-media-pill">🎬 情境動畫播放中</span>
       </div>
       <p class="q-scene">{{ quest.scene }}</p>
       <h2 class="q-ask">{{ quest.ask }}</h2>
     </div>
 
-    <!-- 上下兩欄配置：上欄 16:9 大尺寸影片舞台（面積放大 4 倍）＋ 下欄橫向回饋提示卡 -->
+    <!-- 上下兩欄配置：上欄 16:9 大尺寸影片舞台 ＋ 下欄橫向回饋提示卡 -->
     <div class="media-stack">
-      <!-- 上欄：16:9 大畫面影片／插圖舞台（絕對定位鎖定，載入不跑版） -->
+      <!-- 上欄：預設直接播放 16:9 題目情境影片 -->
       <div class="media-box">
-        <!-- 底層：插圖柔焦襯底與無影片時的備援畫面 -->
-        <div
-          class="media-sprite-backdrop"
-          :style="{ backgroundImage: `url(${spriteUrl})`, backgroundPosition: quest.spritePos }"
-          aria-hidden="true"
-        ></div>
-
-        <div
-          v-if="!videoUrl"
-          class="media-sprite-main"
-          :style="{ backgroundImage: `url(${spriteUrl})`, backgroundPosition: quest.spritePos }"
-          role="img"
-          :aria-label="quest.scene"
-        ></div>
-
-        <!-- 頂層：16:9 影片播放層（完美貼合 848×477 的 16:9 舞台） -->
+        <!-- 預設直接渲染並自動播放影片（若有快取優先用 Blob，否則直接串流播放 .mp4，零等待） -->
         <video
-          v-if="videoUrl"
+          v-if="!videoError"
           ref="videoRef"
           :key="quest.id"
           class="media-video"
-          :class="{ ready: isVideoReady }"
-          :src="videoUrl"
+          :src="activeVideoSrc"
           :muted="isVideoMuted"
           autoplay
           loop
           playsinline
           webkit-playsinline
           preload="auto"
-          @loadeddata="onVideoLoaded"
+          @canplay="onVideoCanPlay"
+          @error="onVideoError"
         ></video>
 
-        <div v-if="videoUrl" class="video-controls">
+        <!-- 備援插圖：僅在影片檔案不存在或載入失敗時才顯示 -->
+        <template v-else>
+          <div
+            class="media-sprite-backdrop"
+            :style="{ backgroundImage: `url(${spriteUrl})`, backgroundPosition: quest.spritePos }"
+            aria-hidden="true"
+          ></div>
+          <div
+            class="media-sprite-main"
+            :style="{ backgroundImage: `url(${spriteUrl})`, backgroundPosition: quest.spritePos }"
+            role="img"
+            :aria-label="quest.scene"
+          ></div>
+        </template>
+
+        <div v-if="!videoError" class="video-controls">
           <button
             class="video-ctrl-btn"
             :aria-pressed="!isVideoMuted"
@@ -79,7 +79,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import FeedbackCard from './FeedbackCard.vue'
 import { useVideoCache } from '../composables/useVideoCache'
 import { asset } from '../utils/asset'
@@ -94,15 +94,19 @@ const props = defineProps({
 
 const spriteUrl = asset('插入圖片.jpg')
 const videoRef = ref(null)
-const isVideoReady = ref(false)
-const { blobUrlMap, isVideoMuted, preloadQuestVideo, safeAutoPlay, toggleVideoMute } = useVideoCache()
+const videoError = ref(false)
+const activeVideoSrc = ref('')
 
-// 只有影片已快取為 Blob 時才使用影片；否則顯示原有情境插圖
-const videoUrl = computed(() => blobUrlMap[props.quest.id] || '')
+const { blobUrlMap, isVideoMuted, safeAutoPlay, toggleVideoMute } = useVideoCache()
 
-function onVideoLoaded() {
-  isVideoReady.value = true
-  if (videoRef.value) safeAutoPlay(videoRef.value)
+function onVideoCanPlay() {
+  if (videoRef.value && videoRef.value.paused) {
+    safeAutoPlay(videoRef.value)
+  }
+}
+
+function onVideoError() {
+  videoError.value = true
 }
 
 function replayVideo() {
@@ -122,8 +126,9 @@ function toggleMute() {
 watch(
   () => props.quest.id,
   async () => {
-    isVideoReady.value = false
-    await preloadQuestVideo(props.quest)
+    videoError.value = false
+    // 優先使用已預載的記憶體 Blob URL；若背景尚未下載完畢，直接串流播放原始 .mp4，確保一進畫面立即播影片
+    activeVideoSrc.value = blobUrlMap[props.quest.id] || asset(props.quest.videoSrc)
     await nextTick()
     if (videoRef.value) {
       videoRef.value.currentTime = 0
@@ -132,17 +137,6 @@ watch(
   },
   { immediate: true }
 )
-
-watch(videoUrl, async (newUrl) => {
-  if (newUrl) {
-    isVideoReady.value = false
-    await nextTick()
-    if (videoRef.value) {
-      videoRef.value.load()
-      safeAutoPlay(videoRef.value)
-    }
-  }
-})
 </script>
 
 <style scoped>
@@ -232,7 +226,18 @@ watch(videoUrl, async (newUrl) => {
   box-shadow: 0 6px 20px rgba(15, 23, 42, 0.1);
 }
 
-/* 柔焦氛圍背景，讓 1:1 插圖或 16:9 影片邊緣自然融合 */
+/* 16:9 影片：直接填滿 16:9 舞台，無需等待完整 Blob 下載即可立即串流播放 */
+.media-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  z-index: 1;
+}
+
+/* 柔焦氛圍背景（僅在無影片備援時使用） */
 .media-sprite-backdrop {
   position: absolute;
   inset: 0;
@@ -245,7 +250,7 @@ watch(videoUrl, async (newUrl) => {
   opacity: 0.85;
 }
 
-/* 尚未放影片時的 1:1 插圖主體：置中完整顯示於寬舞台中央 */
+/* 尚未放影片時的 1:1 插圖主體 */
 .media-sprite-main {
   position: absolute;
   top: 50%;
@@ -260,23 +265,6 @@ watch(videoUrl, async (newUrl) => {
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.28);
   border: 3px solid #ffffff;
   z-index: 1;
-}
-
-/* 16:9 影片：直接填滿 16:9 舞台 */
-.media-video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-  opacity: 0;
-  transition: opacity 0.25s ease;
-  z-index: 1;
-}
-
-.media-video.ready {
-  opacity: 1;
 }
 
 .video-controls {
